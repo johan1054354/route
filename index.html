@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>RijAssistent</title>
+
+<script src="https://js.api.here.com/v3/3.1/mapsjs-core.js"></script>
+<script src="https://js.api.here.com/v3/3.1/mapsjs-service.js"></script>
+<script src="https://js.api.here.com/v3/3.1/mapsjs-mapevents.js"></script>
+<script src="https://js.api.here.com/v3/3.1/mapsjs-ui.js"></script>
+<link rel="stylesheet" href="https://js.api.here.com/v3/3.1/mapsjs-ui.css">
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap');
+  :root{--bg:#0a0c10;--surface:#12151c;--surface2:#1a1f2b;--border:#252b3b;--accent:#00e5a0;--accent2:#0099ff;--warn:#ff6b35;--text:#e8eaf0;--muted:#5a6280}
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;overflow:hidden;user-select:none}
+
+  /* SETUP */
+  #setup-screen{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;z-index:1000;overflow-y:auto}
+  .logo{font-size:13px;font-family:'DM Mono',monospace;letter-spacing:.3em;color:var(--accent);text-transform:uppercase;margin-bottom:8px}
+  h1{font-size:42px;font-weight:800;line-height:1;margin-bottom:6px;background:linear-gradient(135deg,#fff 0%,var(--accent) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+  .subtitle{font-size:14px;color:var(--muted);margin-bottom:40px;font-family:'DM Mono',monospace}
+  .setup-card{width:100%;max-width:420px;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px;margin-bottom:16px}
+  .setup-card h3{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);font-family:'DM Mono',monospace;margin-bottom:14px}
+  .field{margin-bottom:14px}
+  .field label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px;font-family:'DM Mono',monospace}
+  .field input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:14px 16px;color:var(--text);font-family:'DM Mono',monospace;font-size:14px;outline:none;transition:border-color .2s}
+  .field input:focus{border-color:var(--accent)}
+  .field input::placeholder{color:var(--muted)}
+  .btn-primary{width:100%;max-width:420px;background:var(--accent);color:#000;border:none;border-radius:14px;padding:18px;font-family:'Syne',sans-serif;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:12px}
+  .btn-primary:active{opacity:.85}
+  .api-hint{width:100%;max-width:420px;background:rgba(0,229,160,.07);border:1px solid rgba(0,229,160,.2);border-radius:12px;padding:14px 16px;font-size:12px;font-family:'DM Mono',monospace;color:var(--accent);line-height:1.7}
+  .api-hint a{color:var(--accent2)}
+  .api-hint ol{margin-left:16px;margin-top:6px}
+
+  /* APP */
+  #app{display:none;height:100%;flex-direction:column}
+  #map{flex:1;position:relative}
+
+  /* TOPBAR — twee rijen */
+  #topbar{position:absolute;top:0;left:0;right:0;z-index:100;padding:10px 10px 0;pointer-events:none}
+  .topbar-inner{background:rgba(10,12,16,.92);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--border);border-radius:18px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;pointer-events:all;position:relative}
+
+  .input-row{display:flex;align-items:center;gap:8px;position:relative}
+  .row-icon{font-size:15px;flex-shrink:0;width:22px;text-align:center}
+
+  .loc-input{flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-family:'Syne',sans-serif;font-size:14px;font-weight:600;outline:none;transition:border-color .2s;min-width:0}
+  .loc-input:focus{border-color:var(--accent)}
+  .loc-input::placeholder{color:var(--muted);font-weight:400}
+  .loc-input.has-value{border-color:rgba(0,229,160,.4)}
+
+  .icon-btn{background:var(--surface2);border:1px solid var(--border);border-radius:9px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;flex-shrink:0}
+  .icon-btn:active{background:var(--border)}
+
+  /* Divider tussen de twee rijen */
+  .row-divider{display:flex;align-items:center;gap:6px;padding-left:30px}
+  .divider-line{flex:1;height:1px;background:var(--border)}
+  .swap-btn{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:3px 10px;font-size:11px;font-family:'DM Mono',monospace;color:var(--muted);cursor:pointer;flex-shrink:0}
+  .swap-btn:active{background:var(--border);color:var(--text)}
+
+  /* AUTOCOMPLETE */
+  .ac-dropdown{position:absolute;top:calc(100% + 6px);left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;z-index:300;display:none}
+  .ac-item{padding:12px 14px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+  .ac-item:last-child{border-bottom:none}
+  .ac-item:active{background:var(--surface2)}
+  .ac-icon{color:var(--muted);font-size:13px;flex-shrink:0}
+  .ac-main{font-weight:600;font-size:13px}
+  .ac-sub{font-size:11px;color:var(--muted);font-family:'DM Mono',monospace}
+
+  /* ROUTE PANEL */
+  #route-panel{position:absolute;bottom:0;left:0;right:0;z-index:100;padding:0 10px 10px}
+  .route-card{background:rgba(10,12,16,.93);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--border);border-radius:20px;overflow:hidden}
+
+  #traffic-alert{display:none;padding:11px 14px;background:rgba(255,107,53,.15);border-bottom:1px solid rgba(255,107,53,.3);align-items:center;gap:10px}
+  #traffic-alert.show{display:flex}
+  .alert-title{font-size:13px;font-weight:700;color:var(--warn)}
+  .alert-sub{font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;margin-top:2px}
+
+  #routes-list{padding:12px;display:flex;flex-direction:column;gap:7px;max-height:200px;overflow-y:auto}
+  .route-item{background:var(--surface2);border:1px solid var(--border);border-radius:14px;padding:11px 13px;display:flex;align-items:center;gap:11px}
+  .route-item.active{border-color:var(--accent);background:rgba(0,229,160,.08)}
+  .route-item.alt-faster{border-color:var(--accent2);background:rgba(0,153,255,.08)}
+  .badge{font-size:10px;font-family:'DM Mono',monospace;font-weight:500;letter-spacing:.05em;padding:3px 7px;border-radius:6px;flex-shrink:0}
+  .badge-green{background:var(--accent);color:#000}
+  .badge-blue{background:rgba(0,153,255,.2);color:var(--accent2)}
+  .badge-orange{background:rgba(255,107,53,.2);color:var(--warn)}
+  .route-info{flex:1;min-width:0}
+  .route-name{font-size:13px;font-weight:600;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .route-meta{font-size:11px;font-family:'DM Mono',monospace;color:var(--muted)}
+  .route-time{text-align:right;flex-shrink:0}
+  .time-big{font-size:22px;font-weight:800;line-height:1}
+  .time-label{font-size:10px;font-family:'DM Mono',monospace;color:var(--muted)}
+
+  #statusbar{padding:9px 13px 13px;display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--border)}
+  .status-dot{width:8px;height:8px;border-radius:50%;background:var(--muted);display:inline-block;margin-right:6px}
+  .status-dot.green{background:var(--accent);animation:pulse 2s infinite}
+  .status-dot.orange{background:var(--warn);animation:pulse 1s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  .status-text{font-size:11px;font-family:'DM Mono',monospace;color:var(--muted)}
+  .btn-nav{background:var(--accent);color:#000;border:none;border-radius:10px;padding:8px 14px;font-family:'Syne',sans-serif;font-size:12px;font-weight:700;cursor:pointer}
+
+  #empty-state{padding:18px 14px;text-align:center}
+  .empty-icon{font-size:28px;margin-bottom:7px}
+  .empty-title{font-size:13px;font-weight:600;margin-bottom:3px}
+  .empty-sub{font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;line-height:1.5}
+
+  #loading-overlay{display:none;position:fixed;inset:0;background:rgba(10,12,16,.85);z-index:500;align-items:center;justify-content:center;flex-direction:column;gap:16px}
+  #loading-overlay.show{display:flex}
+  .spinner{width:44px;height:44px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .loading-text{font-family:'DM Mono',monospace;font-size:13px;color:var(--muted)}
+
+  #toast{position:fixed;top:80px;left:50%;transform:translateX(-50%) translateY(-20px);background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:10px 18px;font-size:13px;font-family:'DM Mono',monospace;opacity:0;transition:opacity .3s,transform .3s;z-index:600;pointer-events:none;max-width:90vw;text-align:center}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  #refresh-info{position:absolute;top:8px;right:8px;background:rgba(10,12,16,.7);border:1px solid var(--border);border-radius:8px;padding:4px 8px;font-size:10px;font-family:'DM Mono',monospace;color:var(--muted);pointer-events:none;z-index:50}
+</style>
+</head>
+<body>
+
+<!-- SETUP -->
+<div id="setup-screen">
+  <div class="logo">Navigatie</div>
+  <h1>Rij<br>Assistent</h1>
+  <p class="subtitle">Verkeer · Files · Alternatieve routes</p>
+  <div class="setup-card">
+    <h3>HERE Maps API Key</h3>
+    <div class="field">
+      <label>API Sleutel</label>
+      <input type="text" id="api-key-input" placeholder="Plak hier je HERE API key..." autocomplete="off" spellcheck="false">
+    </div>
+  </div>
+  <button class="btn-primary" onclick="startApp()">▶ Start RijAssistent</button>
+  <div class="api-hint">
+    ℹ️ Gratis API key via <a href="https://developer.here.com" target="_blank">developer.here.com</a><br>
+    <ol>
+      <li>Maak een account aan</li>
+      <li>Klik op <strong>Projects</strong> → <strong>New project</strong></li>
+      <li>Klik op <strong>Create API key</strong></li>
+      <li>Kopieer de key en plak hem hierboven</li>
+    </ol>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <div id="map">
+    <!-- TOPBAR -->
+    <div id="topbar">
+      <div class="topbar-inner">
+
+        <!-- Vertrekpunt -->
+        <div class="input-row" id="origin-row">
+          <span class="row-icon">🟢</span>
+          <input type="text" class="loc-input" id="origin-input" placeholder="Vertrekpunt (of 📍 voor jouw locatie)" autocomplete="off" spellcheck="false">
+          <div class="icon-btn" onclick="useMyLocation()" title="Mijn locatie als vertrekpunt">📍</div>
+          <div class="ac-dropdown" id="origin-ac"></div>
+        </div>
+
+        <!-- Wissel knop -->
+        <div class="row-divider">
+          <div class="divider-line"></div>
+          <div class="swap-btn" onclick="swapLocations()">⇅ wissel</div>
+          <div class="divider-line"></div>
+        </div>
+
+        <!-- Bestemming -->
+        <div class="input-row" id="dest-row">
+          <span class="row-icon">🔴</span>
+          <input type="text" class="loc-input" id="dest-input" placeholder="Bestemming" autocomplete="off" spellcheck="false">
+          <div class="icon-btn" onclick="calcRoutes()" title="Route berekenen">→</div>
+          <div class="ac-dropdown" id="dest-ac"></div>
+        </div>
+
+      </div>
+    </div>
+    <div id="refresh-info">Verkeer: —</div>
+  </div>
+
+  <!-- ROUTE PANEL -->
+  <div id="route-panel">
+    <div class="route-card">
+      <div id="traffic-alert">
+        <span style="font-size:20px">⚠️</span>
+        <div>
+          <div class="alert-title" id="alert-title">File gedetecteerd</div>
+          <div class="alert-sub" id="alert-sub">Vertraging op uw route</div>
+        </div>
+      </div>
+      <div id="routes-list">
+        <div id="empty-state">
+          <div class="empty-icon">🗺️</div>
+          <div class="empty-title">Vul vertrekpunt en bestemming in</div>
+          <div class="empty-sub">RijAssistent berekent de snelste route<br>en waarschuwt voor files</div>
+        </div>
+      </div>
+      <div id="statusbar">
+        <div>
+          <span class="status-dot" id="status-dot"></span>
+          <span class="status-text" id="status-text">Gereed</span>
+        </div>
+        <button class="btn-nav" id="nav-btn" onclick="openInMaps()" style="display:none">Open in Kaarten →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="loading-overlay"><div class="spinner"></div><div class="loading-text" id="loading-text">Laden...</div></div>
+<div id="toast"></div>
+
+<script>
+// ── STATE ──────────────────────────────────────────────────────────
+let platform, map;
+let apiKey = '';
+
+// Coördinaten
+let originCoords = null;   // vertrekpunt
+let destCoords   = null;   // bestemming
+let originName   = '';
+let destName     = '';
+let usingMyLocation = false; // vertrekpunt = GPS
+
+// Kaartobjecten
+let routeObjs = [];
+
+// Autocomplete state
+let acState = {
+  origin: { items: [], timeout: null },
+  dest:   { items: [], timeout: null }
+};
+
+// ── START ──────────────────────────────────────────────────────────
+function startApp() {
+  apiKey = document.getElementById('api-key-input').value.trim();
+  if (!apiKey) { showToast('⚠️ Vul een HERE API key in'); return; }
+  try { localStorage.setItem('here_api_key', apiKey); } catch(e) {}
+
+  showLoading('Kaart laden...');
+  document.getElementById('setup-screen').style.display = 'none';
+  const appEl = document.getElementById('app');
+  appEl.style.display = 'flex';
+  appEl.style.flexDirection = 'column';
+
+  try {
+    platform = new H.service.Platform({ apikey: apiKey });
+    const layers = platform.createDefaultLayers();
+    map = new H.Map(
+      document.getElementById('map'),
+      layers.vector.normal.traffic,
+      { zoom: 13, center: { lat: 52.3676, lng: 4.9041 }, pixelRatio: window.devicePixelRatio || 1 }
+    );
+    new H.mapevents.Behavior(new H.mapevents.MapEvents(map));
+    const ui = H.ui.UI.createDefault(map, layers);
+    try { ui.removeControl('mapsettings'); ui.removeControl('zoom'); ui.removeControl('scalebar'); } catch(e) {}
+    window.addEventListener('resize', () => map.getViewPort().resize());
+
+    hideLoading();
+    setStatus('green', 'Klaar');
+
+    // Input listeners
+    setupInput('origin');
+    setupInput('dest');
+
+    // Auto GPS locatie als vertrekpunt
+    useMyLocation();
+
+    // Ververs verkeer elke 5 minuten
+    setInterval(() => { if (originCoords && destCoords) calcRoutes(true); }, 5 * 60 * 1000);
+
+  } catch(err) {
+    hideLoading();
+    showToast('❌ Kan kaart niet laden');
+    document.getElementById('setup-screen').style.display = 'flex';
+    appEl.style.display = 'none';
+  }
+}
+
+// ── INPUT SETUP ────────────────────────────────────────────────────
+function setupInput(which) {
+  const input = document.getElementById(`${which}-input`);
+  input.addEventListener('input', e => {
+    clearTimeout(acState[which].timeout);
+    const v = e.target.value;
+    if (which === 'origin') { usingMyLocation = false; originCoords = null; }
+    if (v.length < 2) { closeAC(which); return; }
+    acState[which].timeout = setTimeout(() => doAC(which, v), 380);
+  });
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      closeAC(which);
+      geocode(which, e.target.value);
+    }
+  });
+}
+
+// ── GPS LOCATIE ────────────────────────────────────────────────────
+function useMyLocation() {
+  if (!navigator.geolocation) { showToast('📍 Locatie niet beschikbaar'); return; }
+  setStatus('orange', 'Locatie bepalen...');
+  document.getElementById('origin-input').value = '📍 Mijn locatie';
+  document.getElementById('origin-input').classList.add('has-value');
+  usingMyLocation = true;
+
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      originCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      originName = 'Mijn locatie';
+      map.setCenter(originCoords); map.setZoom(14);
+      drawMarker(originCoords, 'origin');
+      setStatus('green', 'Locatie gevonden');
+      if (destCoords) calcRoutes();
+    },
+    () => {
+      usingMyLocation = false;
+      originCoords = null;
+      document.getElementById('origin-input').value = '';
+      document.getElementById('origin-input').classList.remove('has-value');
+      setStatus('', 'Locatie niet beschikbaar');
+      showToast('❌ Locatie geweigerd — vul handmatig in');
+    },
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
+}
+
+// ── AUTOCOMPLETE ───────────────────────────────────────────────────
+function doAC(which, q) {
+  const svc = platform.getSearchService();
+  const p = { q, limit: 5, lang: 'nl' };
+  // Gebruik bekende coördinaten als zoekcentrum
+  const center = which === 'dest' ? (originCoords || null) : null;
+  if (center) p.at = `${center.lat},${center.lng}`;
+
+  svc.autosuggest(p,
+    res => {
+      const items = (res.items || []).slice(0, 5);
+      acState[which].items = items;
+      const ac = document.getElementById(`${which}-ac`);
+      if (!items.length) { ac.style.display = 'none'; return; }
+      ac.innerHTML = items.map((it, i) => `
+        <div class="ac-item" onclick="pickAC('${which}',${i})">
+          <span class="ac-icon">📍</span>
+          <div>
+            <div class="ac-main">${it.title || ''}</div>
+            <div class="ac-sub">${it.address?.city || it.address?.county || ''}</div>
+          </div>
+        </div>`).join('');
+      ac.style.display = 'block';
+    },
+    () => closeAC(which)
+  );
+}
+
+function pickAC(which, i) {
+  const it = acState[which].items[i];
+  if (!it) return;
+  closeAC(which);
+  const input = document.getElementById(`${which}-input`);
+  input.value = it.title || '';
+  input.classList.add('has-value');
+
+  if (it.position) {
+    setCoords(which, it.position, it.title || '');
+    tryCalcRoutes();
+  } else {
+    geocode(which, it.title || '');
+  }
+}
+
+function closeAC(which) {
+  document.getElementById(`${which}-ac`).style.display = 'none';
+}
+
+// ── GEOCODE ────────────────────────────────────────────────────────
+function geocode(which, q) {
+  if (!q.trim()) return;
+  showLoading('Adres zoeken...');
+  const svc = platform.getSearchService();
+  const p = { q, limit: 1, lang: 'nl' };
+  const center = which === 'dest' ? originCoords : null;
+  if (center) p.at = `${center.lat},${center.lng}`;
+
+  svc.geocode(p,
+    res => {
+      hideLoading();
+      if (!res.items?.length) { showToast('❌ Adres niet gevonden'); return; }
+      const it = res.items[0];
+      const input = document.getElementById(`${which}-input`);
+      input.value = it.title || q;
+      input.classList.add('has-value');
+      setCoords(which, it.position, it.title || q);
+      tryCalcRoutes();
+    },
+    () => { hideLoading(); showToast('❌ Zoekopdracht mislukt'); }
+  );
+}
+
+function setCoords(which, pos, name) {
+  if (which === 'origin') { originCoords = pos; originName = name; usingMyLocation = false; }
+  else { destCoords = pos; destName = name; }
+  drawMarker(pos, which);
+}
+
+function tryCalcRoutes() {
+  if (originCoords && destCoords) calcRoutes();
+}
+
+// ── WISSEL ─────────────────────────────────────────────────────────
+function swapLocations() {
+  // Wissel tekst
+  const oi = document.getElementById('origin-input');
+  const di = document.getElementById('dest-input');
+  [oi.value, di.value] = [di.value, oi.value];
+
+  // Wissel coördinaten
+  [originCoords, destCoords] = [destCoords, originCoords];
+  [originName, destName] = [destName, originName];
+
+  // Wissel has-value klasse
+  if (originCoords) oi.classList.add('has-value'); else oi.classList.remove('has-value');
+  if (destCoords) di.classList.add('has-value'); else di.classList.remove('has-value');
+
+  usingMyLocation = false;
+
+  if (originCoords && destCoords) calcRoutes();
+}
+
+// ── MARKERS ────────────────────────────────────────────────────────
+function drawMarker(pos, which) {
+  map.getObjects().filter(o => o._markerType === which).forEach(o => map.removeObject(o));
+
+  let svg;
+  if (which === 'origin') {
+    svg = `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22"><circle cx="11" cy="11" r="10" fill="#00e5a0" fill-opacity=".25" stroke="#00e5a0" stroke-width="2"/><circle cx="11" cy="11" r="5" fill="#00e5a0"/></svg>`;
+  } else {
+    svg = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36"><path d="M14 0C6.268 0 0 6.268 0 14c0 9.333 14 22 14 22s14-12.667 14-22C28 6.268 21.732 0 14 0z" fill="#ff6b35"/><circle cx="14" cy="14" r="6" fill="#0a0c10"/></svg>`;
+  }
+  const anchor = which === 'dest' ? { x:14, y:36 } : { x:11, y:11 };
+  const size = which === 'dest' ? { w:28, h:36 } : { w:22, h:22 };
+  const m = new H.map.Marker(pos, { icon: new H.map.Icon(svg, { size, anchor }) });
+  m._markerType = which;
+  map.addObject(m);
+}
+
+// ── ROUTING ────────────────────────────────────────────────────────
+function calcRoutes(silent = false) {
+  if (!originCoords || !destCoords) {
+    if (!originCoords) showToast('📍 Vul een vertrekpunt in');
+    else showToast('🔴 Vul een bestemming in');
+    return;
+  }
+
+  if (!silent) showLoading('Routes berekenen...');
+  setStatus('orange', 'Routes laden...');
+
+  const url = new URL('https://router.hereapi.com/v8/routes');
+  url.searchParams.set('transportMode', 'car');
+  url.searchParams.set('origin', `${originCoords.lat},${originCoords.lng}`);
+  url.searchParams.set('destination', `${destCoords.lat},${destCoords.lng}`);
+  url.searchParams.set('return', 'summary,polyline');
+  url.searchParams.set('alternatives', '2');
+  url.searchParams.set('apikey', apiKey);
+
+  fetch(url.toString())
+    .then(r => {
+      if (!r.ok) return r.json().then(e => { throw new Error(e.title || `Fout ${r.status}`); });
+      return r.json();
+    })
+    .then(data => {
+      hideLoading();
+      if (!data.routes?.length) { showToast('❌ Geen route gevonden'); setStatus('', 'Geen route'); return; }
+      renderRoutes(data.routes);
+      setStatus('green', 'Routes geladen');
+      const t = new Date().toLocaleTimeString('nl-NL', { hour:'2-digit', minute:'2-digit' });
+      document.getElementById('refresh-info').textContent = `Verkeer: ${t}`;
+    })
+    .catch(err => {
+      hideLoading();
+      showToast(`❌ ${err.message || 'Routefout'}`);
+      setStatus('', 'Fout bij routes');
+    });
+}
+
+// ── RENDER ROUTES ──────────────────────────────────────────────────
+function renderRoutes(routes) {
+  // Verwijder oude polylijnen (maar niet markers)
+  routeObjs.forEach(o => { try { map.removeObject(o); } catch(e){} });
+  routeObjs = [];
+
+  const list = document.getElementById('routes-list');
+  list.innerHTML = '';
+
+  const sorted = routes.map((r,i)=>({r,i}))
+    .sort((a,b)=>(a.r.sections[0]?.summary?.duration||0)-(b.r.sections[0]?.summary?.duration||0));
+
+  let maxDelay = 0;
+  sorted.forEach(({r}) => {
+    const s = r.sections[0]?.summary || {};
+    const d = Math.max(0,(s.duration||0)-(s.baseDuration||s.duration||0));
+    if (d > maxDelay) maxDelay = d;
+  });
+  const hasTraffic = maxDelay > 120;
+
+  if (hasTraffic) {
+    document.getElementById('alert-title').textContent = '⚠️ File op de route';
+    document.getElementById('alert-sub').textContent = `Tot ${Math.round(maxDelay/60)} min vertraging — alternatieve route beschikbaar`;
+    document.getElementById('traffic-alert').classList.add('show');
+    speak('Let op, er is een file op uw route. Er is een snellere alternatieve route beschikbaar.');
+  } else {
+    document.getElementById('traffic-alert').classList.remove('show');
+  }
+
+  sorted.forEach(({r}, si) => {
+    const sec = r.sections[0];
+    const sum = sec?.summary || {};
+    const dur = sum.duration || 0;
+    const base = sum.baseDuration || dur;
+    const delay = Math.max(0, dur - base);
+    const distKm = ((sum.length||0)/1000).toFixed(1);
+    const durMin = Math.round(dur/60);
+    const delayMin = Math.round(delay/60);
+    const isFastest = si === 0;
+    const hasDelay = delay > 120;
+
+    let badgeCls, badgeTxt;
+    if (isFastest && hasTraffic) { badgeCls='badge-blue'; badgeTxt='SNELSTE'; }
+    else if (isFastest) { badgeCls='badge-green'; badgeTxt='AANBEVOLEN'; }
+    else if (hasDelay) { badgeCls='badge-orange'; badgeTxt='FILE'; }
+    else { badgeCls='badge-blue'; badgeTxt='ALTERNATIEF'; }
+
+    const el = document.createElement('div');
+    el.className = `route-item${isFastest?' active':''}${isFastest&&hasTraffic?' alt-faster':''}`;
+    el.innerHTML = `
+      <span class="badge ${badgeCls}">${badgeTxt}</span>
+      <div class="route-info">
+        <div class="route-name">${si===0 ? destName : 'Via alternatieve weg'}</div>
+        <div class="route-meta">${distKm} km${hasDelay?' · +'+delayMin+' min vertraging':' · Geen file'}</div>
+      </div>
+      <div class="route-time"><div class="time-big">${durMin}'</div><div class="time-label">min</div></div>`;
+    list.appendChild(el);
+
+    if (sec?.polyline) {
+      try {
+        const ls = H.geo.LineString.fromFlexiblePolyline(sec.polyline);
+        const poly = new H.map.Polyline(ls, {
+          style: { lineWidth: isFastest ? 5 : 3, strokeColor: isFastest ? '#00e5a0' : '#3a4060' }
+        });
+        map.addObject(poly);
+        routeObjs.push(poly);
+      } catch(e) {}
+    }
+  });
+
+  document.getElementById('nav-btn').style.display = 'block';
+
+  // Zoom op alle routes + beide markers
+  try {
+    const allObjs = [...routeObjs, ...map.getObjects().filter(o => o._markerType)];
+    if (allObjs.length) {
+      const group = new H.map.Group();
+      allObjs.forEach(o => group.addObject(o));
+      const bb = group.getBoundingBox();
+      if (bb) map.getViewModel().setLookAtData({ bounds: bb }, true);
+    }
+  } catch(e) {}
+}
+
+// ── OPEN IN KAARTEN ────────────────────────────────────────────────
+function openInMaps() {
+  if (!destCoords) return;
+  const { lat: dlat, lng: dlng } = destCoords;
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  if (isIOS) {
+    // Apple Kaarten met vertrek- en bestemmingspunt
+    if (originCoords && !usingMyLocation) {
+      window.open(`maps://maps.apple.com/?saddr=${originCoords.lat},${originCoords.lng}&daddr=${dlat},${dlng}&dirflg=d`, '_blank');
+    } else {
+      window.open(`maps://maps.apple.com/?daddr=${dlat},${dlng}&dirflg=d`, '_blank');
+    }
+  } else {
+    if (originCoords && !usingMyLocation) {
+      window.open(`https://www.google.com/maps/dir/?api=1&origin=${originCoords.lat},${originCoords.lng}&destination=${dlat},${dlng}&travelmode=driving`, '_blank');
+    } else {
+      window.open(`https://www.google.com/maps/dir/?api=1&destination=${dlat},${dlng}&travelmode=driving`, '_blank');
+    }
+  }
+}
+
+// ── SPEECH ─────────────────────────────────────────────────────────
+function speak(text) {
+  if (!('speechSynthesis' in window)) return;
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'nl-NL'; u.rate = 0.95;
+  window.speechSynthesis.speak(u);
+}
+
+// ── UI HELPERS ─────────────────────────────────────────────────────
+function setStatus(type, text) {
+  document.getElementById('status-dot').className = `status-dot${type?' '+type:''}`;
+  document.getElementById('status-text').textContent = text;
+}
+function showLoading(t) { document.getElementById('loading-text').textContent = t||'Laden...'; document.getElementById('loading-overlay').classList.add('show'); }
+function hideLoading() { document.getElementById('loading-overlay').classList.remove('show'); }
+let toastT;
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('show'), 3500);
+}
+
+// Sluit autocomplete bij klik buiten
+document.addEventListener('click', e => {
+  if (!e.target.closest('#origin-row')) closeAC('origin');
+  if (!e.target.closest('#dest-row')) closeAC('dest');
+});
+
+// Laad opgeslagen key
+window.addEventListener('load', () => {
+  try { const k = localStorage.getItem('here_api_key'); if (k) document.getElementById('api-key-input').value = k; } catch(e) {}
+});
+</script>
+</body>
+</html>
